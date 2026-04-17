@@ -1,0 +1,43 @@
+<component name="InspectionProjectProfileManager">
+  <profile version="1.0">
+    <option name="myName" value="Project Default" />
+    <inspection_tool class="Eslint" enabled="true" level="WARNING" enabled_by_default="true" />
+    <inspection_tool class="PyPackageRequirementsInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <option name="ignoredPackages">
+        <list>
+          <option value="asgiref" />
+          <option value="certifi" />
+          <option value="cffi" />
+          <option value="charset-normalizer" />
+          <option value="cryptography" />
+          <option value="defusedxml" />
+          <option value="Django" />
+          <option value="django-allauth" />
+          <option value="django-bootstrap5" />
+          <option value="django-etc" />
+          <option value="django-hitcount" />
+          <option value="django-location-field" />
+          <option value="django-unfold" />
+          <option value="Faker" />
+          <option value="idna" />
+          <option value="oauthlib" />
+          <option value="pillow" />
+          <option value="psycopg2" />
+          <option value="pycparser" />
+          <option value="PyJWT" />
+          <option value="python-dateutil" />
+          <option value="python-dotenv" />
+          <option value="python3-openid" />
+          <option value="requests" />
+          <option value="requests-oauthlib" />
+          <option value="six" />
+          <option value="social-auth-app-django" />
+          <option value="social-auth-core" />
+          <option value="sqlparse" />
+          <option value="tzdata" />
+          <option value="urllib3" />
+        </list>
+      </option>
+    </inspection_tool>
+  </profile>
+</component>
