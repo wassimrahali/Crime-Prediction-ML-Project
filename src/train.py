@@ -41,7 +41,6 @@ def make_model(name: Literal["logreg", "rf", "xgb", "lgb"], *, cfg: TrainConfig 
 	if name == "logreg":
 		return LogisticRegression(
 			max_iter=2000,
-			n_jobs=cfg.n_jobs,
 			class_weight="balanced",
 			solver="lbfgs",
 		)

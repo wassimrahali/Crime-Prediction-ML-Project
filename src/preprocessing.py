@@ -14,13 +14,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Literal
 
+import argparse
+
 import numpy as np
 import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OneHotEncoder
+from sklearn.preprocessing import FunctionTransformer, OneHotEncoder
 
 from .features import engineer_features
 
@@ -199,6 +201,26 @@ def _existing_cols(df: pd.DataFrame, cols: Iterable[str]) -> list[str]:
 	return [c for c in cols if c in df.columns]
 
 
+def _to_object_numpy(X):
+	"""Convert pandas inputs (including nullable dtypes) to numpy object arrays.
+
+	Sklearn imputers/encoders treat missingness as `np.nan`.
+	Pandas nullable dtypes often use `pd.NA`, which can break sklearn masking.
+	"""
+	X_df = pd.DataFrame(X)
+	# Ensure *all* pandas missing values become np.nan (pd.NA can break sklearn masking)
+	X_df = X_df.where(~X_df.isna(), np.nan)
+	return X_df.astype(object).to_numpy()
+
+
+def _to_float_numpy(X):
+	"""Convert pandas numeric-ish inputs to a float numpy array with np.nan."""
+	X_df = pd.DataFrame(X)
+	X_df = X_df.where(~X_df.isna(), np.nan)
+	X_num = X_df.apply(pd.to_numeric, errors="coerce")
+	return X_num.to_numpy(dtype=float)
+
+
 def build_preprocessor(df: pd.DataFrame, *, spec: PreprocessSpec | None = None) -> ColumnTransformer:
 	"""Build a sklearn ColumnTransformer for the prepared (engineered) dataframe."""
 	spec = spec or PreprocessSpec()
@@ -218,12 +240,20 @@ def build_preprocessor(df: pd.DataFrame, *, spec: PreprocessSpec | None = None) 
 
 	numeric_pipe = Pipeline(
 		steps=[
+			(
+				"to_float",
+				FunctionTransformer(_to_float_numpy, validate=False, feature_names_out="one-to-one"),
+			),
 			("imputer", SimpleImputer(strategy="median")),
 		]
 	)
 
 	ohe_pipe = Pipeline(
 		steps=[
+			(
+				"to_obj",
+				FunctionTransformer(_to_object_numpy, validate=False, feature_names_out="one-to-one"),
+			),
 			("imputer", SimpleImputer(strategy="most_frequent")),
 			("ohe", OneHotEncoder(handle_unknown="ignore", sparse_output=True)),
 		]
@@ -231,6 +261,10 @@ def build_preprocessor(df: pd.DataFrame, *, spec: PreprocessSpec | None = None) 
 
 	te_pipe = Pipeline(
 		steps=[
+			(
+				"to_obj",
+				FunctionTransformer(_to_object_numpy, validate=False, feature_names_out="one-to-one"),
+			),
 			("imputer", SimpleImputer(strategy="most_frequent")),
 			("te", TargetMeanEncoder(smoothing=10.0, min_samples_leaf=20)),
 		]
@@ -320,3 +354,89 @@ def load_processed_split(processed_dir: str | Path, split: Literal["train", "val
 	if csv_path.exists():
 		return pd.read_csv(csv_path)
 	raise FileNotFoundError(f"Could not find processed split '{split}' in {processed_dir}.")
+
+
+def main(argv: list[str] | None = None) -> int:
+	parser = argparse.ArgumentParser(description="Preprocess the raw crime dataset into train/val/test splits.")
+	parser.add_argument(
+		"--project-root",
+		type=Path,
+		default=Path(__file__).resolve().parents[1],
+		help="Project root (defaults to repo root inferred from this file).",
+	)
+	parser.add_argument(
+		"--raw-csv",
+		type=Path,
+		default=None,
+		help="Path to raw CSV (defaults to data/raw/database.csv under project root).",
+	)
+	parser.add_argument(
+		"--processed-dir",
+		type=Path,
+		default=None,
+		help="Output directory (defaults to data/processed under project root).",
+	)
+	parser.add_argument(
+		"--format",
+		choices=["parquet", "csv"],
+		default="parquet",
+		help="Output format for splits.",
+	)
+	parser.add_argument(
+		"--nrows",
+		type=int,
+		default=None,
+		help="Optional number of rows to read (useful for quick smoke runs).",
+	)
+	parser.add_argument("--test-size", type=float, default=0.30, help="Fraction to hold out for val+test.")
+	parser.add_argument(
+		"--val-size",
+		type=float,
+		default=0.50,
+		help="Fraction of the temp split to use for test (0.5 => 15/15 with default test-size).",
+	)
+	parser.add_argument("--random-state", type=int, default=42, help="Random seed.")
+	args = parser.parse_args(argv)
+
+	paths = DataPaths.from_project_root(args.project_root)
+	raw_csv = args.raw_csv or paths.raw_csv
+	processed_dir = args.processed_dir or paths.processed_dir
+
+	if not raw_csv.exists():
+		raise FileNotFoundError(
+			f"Raw dataset not found at {raw_csv}. Place it there or pass --raw-csv."
+		)
+
+	print(f"Loading raw CSV: {raw_csv}")
+	raw_df = pd.read_csv(raw_csv, low_memory=False, nrows=args.nrows)
+	print(f"Raw shape: {raw_df.shape}")
+
+	print("Preparing dataframe for modeling...")
+	prepared = prepare_dataframe_for_modeling(raw_df)
+	y = make_target(prepared)
+	mask = y.notna()
+	prepared = prepared.loc[mask].reset_index(drop=True)
+	y = y.loc[mask].astype(int).reset_index(drop=True)
+
+	print(f"Labeled shape: {prepared.shape} (dropped {int((~mask).sum())} unlabeled rows)")
+	X_train, X_val, X_test, y_train, y_val, y_test = stratified_split(
+		prepared, y, test_size=args.test_size, val_size=args.val_size, random_state=args.random_state
+	)
+
+	print(f"Saving splits to: {processed_dir} ({args.format})")
+	save_splits(
+		processed_dir,
+		X_train=X_train,
+		X_val=X_val,
+		X_test=X_test,
+		y_train=y_train,
+		y_val=y_val,
+		y_test=y_test,
+		format=args.format,
+	)
+	print("Done.")
+	return 0
+
+
+if __name__ == "__main__":
+	raise SystemExit(main())
