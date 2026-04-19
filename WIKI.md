@@ -80,6 +80,11 @@ Purpose: create the “model-ready” splits.
 - Saves parquet splits to `data/processed/`
 - Verifies that the preprocessor can fit and transform
 
+Notes:
+- Parquet writing requires `pyarrow` available in the active environment/kernel.
+- The sklearn preprocessing pipeline is designed to tolerate pandas missing values by converting them to `np.nan` before imputation.
+- Feature names for explainability are available via `preprocessor.get_feature_names_out()`.
+
 ### `notebooks/03_baseline_models.ipynb`
 Purpose: train several baseline models and compare them.
 - Loads processed splits
@@ -176,6 +181,18 @@ This usually means VS Code is analyzing with the wrong interpreter.
 ### Parquet save/load errors
 Parquet needs `pyarrow` (already added to requirements).
 - If needed: `pip install pyarrow`
+
+If you installed `pyarrow` after opening a notebook kernel, restart the kernel and re-run the notebook cells.
+
+### Scikit-learn warning: “Skipping features without any observed values”
+This can happen when a column is entirely missing in the training split.
+- It is a warning (not a crash): the imputer skips those all-missing features.
+- If you want to eliminate the warning, drop columns that are all-missing in `X_train` before fitting.
+
+### Running tests fails with “No module named pytest”
+`pytest` is not currently pinned as a runtime dependency.
+- Install: `python -m pip install pytest`
+- Run: `python -m pytest -q`
 
 ### Tuning is slow
 Optuna on 600k+ rows can be expensive.

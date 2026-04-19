@@ -310,6 +310,32 @@ poetry.toml
 # LSP config files
 pyrightconfig.json
 
-#!! ERROR: vscode is undefined. Use list command to see defined gitignore types !!#
+
+### VS Code ###
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
+
+### ML / Data Artifacts ###
+# Never commit local virtualenvs
+venv312/
+
+# Datasets and generated splits (keep placeholders/docs only)
+data/raw/*
+!data/raw/.gitkeep
+!data/raw/README.md
+
+data/processed/*
+!data/processed/.gitkeep
+!data/processed/README.md
+
+# Common large artifacts
+*.parquet
+*.joblib
+
+# Jupyter output checkpoints
+.ipynb_checkpoints/
 
 # End of https://www.toptal.com/developers/gitignore/api/python,node,vscode
